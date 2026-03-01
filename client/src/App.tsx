@@ -19,7 +19,9 @@ import React, { useEffect } from 'react';
 import { Box, CircularProgress, Typography, Button } from '@mui/material';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './api/hooks';
-import { AppShell } from './components/layout/AppShell';
+import { MainShell } from './components/shell/MainShell';
+import { AuthProvider } from './contexts/AuthContext';
+import { api } from './api/client';
 
 export const App: React.FC = () => {
   const queryClient = useQueryClient();
@@ -101,6 +103,10 @@ export const App: React.FC = () => {
     );
   }
 
-  // Authenticated — render the explorer
-  return <AppShell />;
+  // Authenticated — render the main shell (nav bar + active plugin)
+  return (
+    <AuthProvider auth={authState} logout={() => api.authLogout()}>
+      <MainShell />
+    </AuthProvider>
+  );
 };

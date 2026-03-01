@@ -30,10 +30,8 @@ import {
   ArrowUpward,
   Refresh,
   MoreHoriz,
-  Logout,
 } from '@mui/icons-material';
 import { useExplorerStore } from '../../store/explorerStore';
-import { api } from '../../api/client';
 
 interface ToolbarProps {
   loading?: boolean;
@@ -102,12 +100,6 @@ export const ExplorerToolbar: React.FC<ToolbarProps> = ({
           </IconButton>
         </Tooltip>
       )}
-
-      <Tooltip title="Logout">
-        <IconButton size="small" color="inherit" onClick={() => api.authLogout()} sx={{ ml: 1 }}>
-          <Logout fontSize="small" />
-        </IconButton>
-      </Tooltip>
     </MuiToolbar>
   );
 };

@@ -191,7 +191,7 @@ export const AppShell: React.FC = () => {
   // Path display
   const pathDisplay = selectedNode
     ? `${getKind(selectedNode.kind)?.title || ''} / ${selectedNode.name}`
-    : 'Esquire Office';
+    : 'Business Explorer';
 
   // ── Navigate to a tree node by id ──
   const navigateToNode = useCallback((nodeId: string | null, addToHistory = false) => {
