@@ -17,7 +17,6 @@
  */
 import React, { useState, useCallback } from 'react';
 import { Box, ButtonBase, Typography, Button, IconButton, Tooltip } from '@mui/material';
-import GavelIcon from '@mui/icons-material/Gavel';
 import { Logout, PushPin, PushPinOutlined, ChevronRight } from '@mui/icons-material';
 import { useAuthContext } from '../../contexts/AuthContext';
 import {
@@ -76,18 +75,20 @@ export const MainShell: React.FC = () => {
         sx={{
           height: BANNER_HEIGHT,
           flexShrink: 0,
-          bgcolor: 'primary.main',
+          bgcolor: '#fff',
+          borderBottom: 1,
+          borderColor: 'divider',
           display: 'flex',
           alignItems: 'center',
           px: 2,
           gap: 1,
         }}
       >
-        <GavelIcon sx={{ color: 'primary.contrastText', fontSize: 22 }} />
+        <img src="/favicon.png" alt="Esquire" style={{ width: 30, height: 30 }} />
         <Typography
           variant="subtitle1"
           sx={{
-            color: 'primary.contrastText',
+            color: 'text.primary',
             fontWeight: 700,
             letterSpacing: '0.04em',
             flex: 1,
@@ -96,7 +97,7 @@ export const MainShell: React.FC = () => {
           Esquire Office
         </Typography>
         <Tooltip title="Logout">
-          <IconButton size="small" onClick={logout} sx={{ color: 'primary.contrastText' }}>
+          <IconButton size="small" onClick={logout} sx={{ color: 'text.secondary' }}>
             <Logout fontSize="small" />
           </IconButton>
         </Tooltip>
