@@ -38,6 +38,7 @@ interface NewEntityDialogProps {
   open: boolean;
   parentNode: EsqTreeNodeDto | null;
   childKind: number;
+  initialFields?: Record<string, any>;   // pre-populated fields (e.g. from clipboard paste)
   onClose: () => void;
   onCreated: () => void;
 }
@@ -46,6 +47,7 @@ export const NewEntityDialog: React.FC<NewEntityDialogProps> = ({
   open,
   parentNode,
   childKind,
+  initialFields,
   onClose,
   onCreated,
 }) => {
@@ -58,13 +60,13 @@ export const NewEntityDialog: React.FC<NewEntityDialogProps> = ({
 
   const kindDef = getKind(childKind);
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens; pre-populate from initialFields if provided (paste)
   useEffect(() => {
     if (open) {
-      setFields({});
+      setFields(initialFields ?? {});
       setError(null);
     }
-  }, [open, childKind]);
+  }, [open, childKind, initialFields]);
 
   const handleFieldChange = useCallback((name: string, value: any) => {
     setFields(prev => ({ ...prev, [name]: value }));

@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Menu, MenuItem, ListItemIcon, ListItemText, Typography, Divider } from '@mui/material';
 import Icon from '@mui/material/Icon';
 
@@ -23,10 +23,11 @@ export interface ContextMenuItem {
   label: string;
   icon?: string;
   shortcut?: string;           // keyboard shortcut hint (e.g. "Alt+Enter")
-  onClick: () => void;
+  onClick?: () => void;
   disabled?: boolean;
   dividerAfter?: boolean;
   dividerBefore?: boolean;
+  submenu?: ContextMenuItem[];  // nested submenu items
 }
 
 interface ContextMenuProps {
@@ -35,6 +36,72 @@ interface ContextMenuProps {
   items: ContextMenuItem[];
   onClose: () => void;
 }
+
+/** A single menu item that opens a nested submenu on hover. */
+const SubMenuItemComponent: React.FC<{
+  item: ContextMenuItem;
+  onRootClose: () => void;
+}> = ({ item, onRootClose }) => {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLLIElement>(null);
+
+  return (
+    <>
+      <MenuItem
+        ref={anchorRef}
+        disabled={item.disabled}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        sx={{ minWidth: 200 }}
+      >
+        {item.icon && (
+          <ListItemIcon>
+            <Icon baseClassName="material-icons-outlined" fontSize="small">{item.icon}</Icon>
+          </ListItemIcon>
+        )}
+        <ListItemText>{item.label}</ListItemText>
+        <Icon fontSize="small" sx={{ ml: 1, color: 'text.secondary' }}>chevron_right</Icon>
+      </MenuItem>
+
+      <Menu
+        anchorEl={anchorRef.current}
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        /* don't steal focus / dim the parent menu */
+        disableAutoFocus
+        disableEnforceFocus
+        disableRestoreFocus
+        /* no backdrop so parent menu stays interactive; keep submenu open while hovering */
+        slotProps={{
+          root: { style: { pointerEvents: 'none' } },
+          paper: {
+            style: { pointerEvents: 'auto' },
+            onMouseEnter: () => setOpen(true),
+            onMouseLeave: () => setOpen(false),
+          },
+        }}
+      >
+        {(item.submenu ?? []).map((sub, j) => (
+          <MenuItem
+            key={j}
+            disabled={sub.disabled}
+            onClick={() => { sub.onClick?.(); setOpen(false); onRootClose(); }}
+            sx={{ minWidth: 160 }}
+          >
+            {sub.icon && (
+              <ListItemIcon>
+                <Icon baseClassName="material-icons-outlined" fontSize="small">{sub.icon}</Icon>
+              </ListItemIcon>
+            )}
+            <ListItemText>{sub.label}</ListItemText>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+};
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ open, position, items, onClose }) => {
   if (!position) return null;
@@ -51,26 +118,35 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ open, position, items,
         if (item.dividerBefore && i > 0) {
           elements.push(<Divider key={`divb-${i}`} />);
         }
-        elements.push(
-          <MenuItem
-            key={`item-${i}`}
-            onClick={() => { item.onClick(); onClose(); }}
-            disabled={item.disabled}
-            sx={{ minWidth: 200 }}
-          >
-            {item.icon && (
-              <ListItemIcon>
-                <Icon baseClassName="material-icons-outlined" fontSize="small">{item.icon}</Icon>
-              </ListItemIcon>
-            )}
-            <ListItemText>{item.label}</ListItemText>
-            {item.shortcut && (
-              <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '0.75rem' }}>
-                {item.shortcut}
-              </Typography>
-            )}
-          </MenuItem>,
-        );
+
+        if (item.submenu && item.submenu.length > 0) {
+          // Render as submenu item
+          elements.push(
+            <SubMenuItemComponent key={`item-${i}`} item={item} onRootClose={onClose} />,
+          );
+        } else {
+          elements.push(
+            <MenuItem
+              key={`item-${i}`}
+              onClick={() => { item.onClick?.(); onClose(); }}
+              disabled={item.disabled}
+              sx={{ minWidth: 200 }}
+            >
+              {item.icon && (
+                <ListItemIcon>
+                  <Icon baseClassName="material-icons-outlined" fontSize="small">{item.icon}</Icon>
+                </ListItemIcon>
+              )}
+              <ListItemText>{item.label}</ListItemText>
+              {item.shortcut && (
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '0.75rem' }}>
+                  {item.shortcut}
+                </Typography>
+              )}
+            </MenuItem>,
+          );
+        }
+
         if (item.dividerAfter) {
           elements.push(<Divider key={`diva-${i}`} />);
         }

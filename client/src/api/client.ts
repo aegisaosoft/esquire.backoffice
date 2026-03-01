@@ -122,8 +122,8 @@ export const api = {
   },
 
   /** POST /esq-cmd-asave — save account entity */
-  esquireCmdAsave(kind: number, id: string, body: any) {
-    const q = buildQuery({ kind, id });
+  esquireCmdAsave(kind: number, id: string, body: any, cmd?: string) {
+    const q = buildQuery({ kind, id, cmd });
     return fetch(`/api/esq-cmd-asave${q}`, {
       method: 'POST',
       credentials: 'include',
@@ -132,10 +132,11 @@ export const api = {
     }).then(r => handleResponse<any>(r));
   },
 
-  /** PUT /esq-key-save — save access profile */
+  /** POST /esq-key-save — save access profile */
   esquireKeySave(id: string, body: any) {
-    return fetch(`/api/esq-key-save?id=${id}`, {
-      method: 'PUT',
+    const q = buildQuery({ id });
+    return fetch(`/api/esq-key-save${q}`, {
+      method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

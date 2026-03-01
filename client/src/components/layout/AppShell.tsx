@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Typography, AppBar, Snackbar, Alert } from '@mui/material';
 import { ExplorerToolbar } from './Toolbar';
 import { TreePanel } from '../tree/TreePanel';
@@ -31,6 +31,7 @@ import { useExplorerStore } from '../../store/explorerStore';
 import { useTreeNodes, useAccessProfile } from '../../api/hooks';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 import { getChildKinds } from '../../utils/objectKinds';
+import { api } from '../../api/client';
 import type { EsqTreeNodeDto } from '../../api/types';
 
 /* ─── Known command metadata (optional overrides for label/icon/shortcut/confirm).
@@ -120,10 +121,13 @@ export const AppShell: React.FC = () => {
     open: false, node: null,
   });
 
-  // New entity dialog
-  const [newDialog, setNewDialog] = useState<{ open: boolean; parentNode: EsqTreeNodeDto | null; childKind: number }>({
+  // New entity dialog (initialFields used for paste pre-population)
+  const [newDialog, setNewDialog] = useState<{ open: boolean; parentNode: EsqTreeNodeDto | null; childKind: number; initialFields?: Record<string, any> }>({
     open: false, parentNode: null, childKind: 0,
   });
+
+  // Internal clipboard for reliable copy/paste (system clipboard readText may be blocked)
+  const clipboardRef = useRef<{ kind: number; [key: string]: any } | null>(null);
 
   // Context menu
   const [contextMenu, setContextMenu] = useState<{
@@ -209,6 +213,29 @@ export const AppShell: React.FC = () => {
     }
   }, []);
 
+  // Copy entity JSON to clipboard (internal ref + system clipboard)
+  const handleCopyEntity = useCallback(async (node: EsqTreeNodeDto) => {
+    try {
+      const entity = await api.esquireCmd(node.kind, String(node.entityId));
+      const kind = getKind(node.kind);
+      const payload = { kind: node.kind, kindName: kind?.name ?? '', ...entity };
+      clipboardRef.current = payload;
+      // Also write to system clipboard (for cross-app paste); ignore if blocked
+      try { await navigator.clipboard.writeText(JSON.stringify(payload, null, 2)); } catch { /* ok */ }
+    } catch (err: any) {
+      setErrorMessage(err.detail || err.message || 'Copy failed');
+    }
+  }, [getKind, setErrorMessage]);
+
+  // Paste entity from clipboard — open NewEntityDialog pre-filled with clipboard data
+  const handlePasteEntity = useCallback((targetNode: EsqTreeNodeDto) => {
+    const entity = clipboardRef.current;
+    if (!entity) return;
+    // Strip id, kind, kindName — keep only field values for pre-population
+    const { id: _id, kind: clipKind, kindName: _kn, ...fields } = entity;
+    setNewDialog({ open: true, parentNode: targetNode, childKind: clipKind, initialFields: fields });
+  }, []);
+
   // ── Build context menu items (dictionary-driven from kind.commands) ──
   const buildContextMenuItems = useCallback((node: EsqTreeNodeDto): ContextMenuItem[] => {
     const items: ContextMenuItem[] = [];
@@ -216,6 +243,30 @@ export const AppShell: React.FC = () => {
     const canGoBack = historyIndex > 0;
     const canGoForward = historyIndex < history.length - 1;
     const hasParent = !!selectedNode?.parentId;
+
+    // --- Clipboard section ---
+    // Paste is enabled only if:
+    //  1) node's kind has child kinds (same check as "New..." section)
+    //  2) internal clipboard contains a valid entity
+    //  3) clipboard entity's kind is one of the resolved child kinds
+    const resolvedChildKinds = getChildKinds(kind, kinds);
+    const clip = clipboardRef.current;
+    const canPaste = !!clip && resolvedChildKinds.some(ck => ck.id === clip.kind);
+
+    items.push({
+      label: 'Copy',
+      icon: 'content_copy',
+      shortcut: 'Ctrl+C',
+      onClick: () => handleCopyEntity(node),
+    });
+    items.push({
+      label: 'Paste',
+      icon: 'content_paste',
+      shortcut: 'Ctrl+V',
+      onClick: canPaste ? () => handlePasteEntity(node) : () => {},
+      disabled: !canPaste,
+      dividerAfter: true,
+    });
 
     // --- Navigation section ---
     items.push({
@@ -290,22 +341,23 @@ export const AppShell: React.FC = () => {
       });
     }
 
-    // --- New... section (child kinds from dictionary) ---
-    const childKinds = getChildKinds(kind, kinds);
-    let firstNew = true;
-    for (const ck of childKinds) {
-      const childKindId = ck.id;
+    // --- New... section (single "New" with submenu for each child kind) ---
+    if (resolvedChildKinds.length > 0) {
       items.push({
-        label: `New ${ck.title}`,
+        label: 'New',
         icon: 'add_circle',
-        onClick: () => setNewDialog({ open: true, parentNode: node, childKind: childKindId }),
-        dividerBefore: firstNew,
+        dividerBefore: true,
+        submenu: resolvedChildKinds.map(ck => ({
+          label: ck.title,
+          icon: ck.icon || 'add',
+          onClick: () => setNewDialog({ open: true, parentNode: node, childKind: ck.id }),
+        })),
       });
-      firstNew = false;
     }
 
     return items;
   }, [getKind, kinds, historyIndex, history.length, selectedNode,
+      handleCopyEntity, handlePasteEntity,
       handleNodeActivate, handleBack, handleForward, handleUp, handleGoToOrigin, executeCommand]);
 
   // Context menu handler
@@ -393,6 +445,7 @@ export const AppShell: React.FC = () => {
         open={newDialog.open}
         parentNode={newDialog.parentNode}
         childKind={newDialog.childKind}
+        initialFields={newDialog.initialFields}
         onClose={() => setNewDialog({ open: false, parentNode: null, childKind: 0 })}
         onCreated={() => { setNewDialog({ open: false, parentNode: null, childKind: 0 }); refetch(); }}
       />
