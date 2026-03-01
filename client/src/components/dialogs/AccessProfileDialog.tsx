@@ -1,3 +1,20 @@
+/**
+ * Esquire Backoffice
+ * Copyright (C) 2026 AegisAOSoft
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   Dialog,
@@ -148,7 +165,7 @@ export const AccessProfileDialog: React.FC<AccessProfileDialogProps> = ({
                         <TableCell>{p.type}</TableCell>
                         <TableCell>{p.kind}</TableCell>
                         <TableCell>
-                          {parseFlags(p.flags || '').map(f => (
+                          {parseFlags(p.flags || []).map(f => (
                             <Chip key={f} label={f} size="small" sx={{ mr: 0.5 }} />
                           ))}
                         </TableCell>

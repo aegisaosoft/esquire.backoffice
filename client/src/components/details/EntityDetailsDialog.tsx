@@ -1,4 +1,21 @@
-import React, { useState, useCallback, useEffect } from 'react';
+/**
+ * Esquire Backoffice
+ * Copyright (C) 2026 AegisAOSoft
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,7 +27,7 @@ import {
   Snackbar,
   Alert,
 } from '@mui/material';
-import { Refresh, Edit, Save, Close } from '@mui/icons-material';
+import { Refresh, Edit, Save, Close, ArrowBack } from '@mui/icons-material';
 import { useEntityDetails, useDictionary, useSaveEntity, useSaveAccountEntity } from '../../api/hooks';
 import { useExplorerStore } from '../../store/explorerStore';
 import { EntityDetailsContent } from './EntityDetailsContent';
@@ -19,22 +36,57 @@ interface EntityDetailsDialogProps {
   open: boolean;
   kind: number;
   entityId: string;
+  /** Command: 'details' (default) or 'acct' for accounting view */
+  cmd?: string;
   onClose: () => void;
+}
+
+interface NavEntry {
+  kind: number;
+  entityId: string;
 }
 
 export const EntityDetailsDialog: React.FC<EntityDetailsDialogProps> = ({
   open,
   kind,
   entityId,
+  cmd,
   onClose,
 }) => {
   const { getKind, patchNodeByEntity } = useExplorerStore();
 
-  const { data: entity, isLoading: entityLoading, refetch } = useEntityDetails(kind, entityId);
+  // ── Navigation stack for drilling into sub-entities ──
+  const [navStack, setNavStack] = useState<NavEntry[]>([]);
+  const [current, setCurrent] = useState<NavEntry>({ kind, entityId });
 
-  // Entity response may carry a different kind than the tree node
-  // (e.g. shortcut kind 53 → real entity kind 52).
-  const resolvedKind = entity?.kind ?? kind;
+  // Sync with props when dialog opens or props change
+  useEffect(() => {
+    setCurrent({ kind, entityId });
+    setNavStack([]);
+  }, [kind, entityId, open]);
+
+  const canGoBack = navStack.length > 0;
+
+  const handleNavigate = useCallback((itemKind: number, itemId: string) => {
+    setNavStack(prev => [...prev, current]);
+    setCurrent({ kind: itemKind, entityId: itemId });
+  }, [current]);
+
+  const handleBack = useCallback(() => {
+    setNavStack(prev => {
+      const next = [...prev];
+      const entry = next.pop();
+      if (entry) setCurrent(entry);
+      return next;
+    });
+  }, []);
+
+  // ── Data fetching uses current navigation state ──
+  // Top-level uses the cmd prop (e.g. 'acct'); sub-navigation always uses 'details'
+  const activeCmd = navStack.length === 0 ? (cmd || 'details') : 'details';
+  const { data: entity, isLoading: entityLoading, refetch } = useEntityDetails(current.kind, current.entityId, activeCmd);
+
+  const resolvedKind = entity?.kind ?? current.kind;
   const kindDef = getKind(resolvedKind);
   const isAcctKind = kindDef?.acct ?? false;
 
@@ -48,11 +100,11 @@ export const EntityDetailsDialog: React.FC<EntityDetailsDialogProps> = ({
     open: false, message: '', severity: 'success',
   });
 
-  // Reset edit state when entity changes
+  // Reset edit state when navigated entity changes
   useEffect(() => {
     setEditedFields({});
     setEditMode(false);
-  }, [entityId, kind]);
+  }, [current.entityId, current.kind]);
 
   const handleFieldChange = useCallback((name: string, value: any) => {
     setEditedFields(prev => ({ ...prev, [name]: value }));
@@ -63,11 +115,11 @@ export const EntityDetailsDialog: React.FC<EntityDetailsDialogProps> = ({
   const handleSave = useCallback(async () => {
     try {
       if (isAcctKind) {
-        await saveAcct.mutateAsync({ kind: resolvedKind, id: entityId, body: editedFields });
+        await saveAcct.mutateAsync({ kind: resolvedKind, id: current.entityId, body: editedFields });
       } else {
-        await saveEntity.mutateAsync({ kind: resolvedKind, id: entityId, body: editedFields });
+        await saveEntity.mutateAsync({ kind: resolvedKind, id: current.entityId, body: editedFields });
       }
-      patchNodeByEntity(entityId, editedFields);
+      patchNodeByEntity(current.entityId, editedFields);
       setEditedFields({});
       setEditMode(false);
       setSnackbar({ open: true, message: 'Saved successfully', severity: 'success' });
@@ -75,7 +127,7 @@ export const EntityDetailsDialog: React.FC<EntityDetailsDialogProps> = ({
     } catch (err: any) {
       setSnackbar({ open: true, message: err.detail || 'Save failed', severity: 'error' });
     }
-  }, [resolvedKind, entityId, editedFields, isAcctKind, saveEntity, saveAcct, refetch, patchNodeByEntity]);
+  }, [resolvedKind, current.entityId, editedFields, isAcctKind, saveEntity, saveAcct, refetch, patchNodeByEntity]);
 
   const loading = entityLoading || dictLoading;
 
@@ -83,8 +135,11 @@ export const EntityDetailsDialog: React.FC<EntityDetailsDialogProps> = ({
     <>
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {canGoBack && (
+            <IconButton size="small" onClick={handleBack}><ArrowBack fontSize="small" /></IconButton>
+          )}
           <Typography variant="h6" component="span" sx={{ flex: 1 }}>
-            {kindDef?.title || 'Entity'}: {entity?.name || entityId}
+            {activeCmd === 'acct' ? 'Accounting' : kindDef?.title || 'Entity'}: {entity?.name || current.entityId}
           </Typography>
           <IconButton size="small" onClick={() => refetch()}><Refresh fontSize="small" /></IconButton>
           <IconButton size="small" onClick={onClose}><Close fontSize="small" /></IconButton>
@@ -97,6 +152,7 @@ export const EntityDetailsDialog: React.FC<EntityDetailsDialogProps> = ({
             editedFields={editedFields}
             editMode={editMode}
             onFieldChange={handleFieldChange}
+            onItemOpen={handleNavigate}
             loading={loading}
           />
         </DialogContent>
