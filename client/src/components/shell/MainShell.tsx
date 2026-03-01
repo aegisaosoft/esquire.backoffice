@@ -246,6 +246,24 @@ export const MainShell: React.FC = () => {
           {ActiveContent && <ActiveContent />}
         </Box>
       </Box>
+
+      {/* ─── Footer ─── */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          borderTop: 1,
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          px: 2,
+          py: 0.5,
+        }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
+          Copyright© 2001, 2026 mir0n&co & Aegis AO Soft
+        </Typography>
+      </Box>
     </Box>
   );
 };
