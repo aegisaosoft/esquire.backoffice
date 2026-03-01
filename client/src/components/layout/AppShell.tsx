@@ -31,6 +31,7 @@ import { useExplorerStore } from '../../store/explorerStore';
 import { useTreeNodes, useAccessProfile } from '../../api/hooks';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 import { getChildKinds } from '../../utils/objectKinds';
+import { resolveNodeIcon } from '../../utils/kindIcons';
 import { api } from '../../api/client';
 import type { EsqTreeNodeDto } from '../../api/types';
 
@@ -48,19 +49,70 @@ interface CmdMeta {
 }
 
 const CMD_META: Record<string, CmdMeta> = {
-  details:  { label: 'Details',         icon: 'info',           shortcut: 'F4' },
-  key:      { label: 'Access Profile',  icon: 'verified_user'  },
-  acct:     { label: 'Accounting',      icon: 'account_balance' },
-  move:     { label: 'Move',            icon: 'drive_file_move' },
-  delete:   { label: 'Delete',          icon: 'delete',         confirm: true, confirmText: 'This action cannot be undone.' },
+  details:    { label: 'Details',         icon: 'info',              shortcut: 'F4' },
+  key:        { label: 'Access Profile',  icon: 'verified_user'     },
+  acct:       { label: 'Accounting',      icon: 'account_balance'   },
+  move:       { label: 'Move',            icon: 'drive_file_move'   },
+  delete:     { label: 'Delete',          icon: 'delete',            confirm: true, confirmText: 'This action cannot be undone.' },
+  suspend:    { label: 'Suspend',         icon: 'pause_circle',      confirm: true, confirmText: 'Entity will be suspended.' },
+  activate:   { label: 'Activate',        icon: 'play_circle',       confirm: true, confirmText: 'Entity will be activated.' },
+  archive:    { label: 'Archive',         icon: 'archive',           confirm: true, confirmText: 'Entity will be archived.' },
+  restore:    { label: 'Restore',         icon: 'restore',           confirm: true, confirmText: 'Entity will be restored.' },
+  block:      { label: 'Block',           icon: 'block',             confirm: true, confirmText: 'Entity will be blocked.' },
+  unblock:    { label: 'Unblock',         icon: 'lock_open',         confirm: true, confirmText: 'Entity will be unblocked.' },
+  disable:    { label: 'Disable',         icon: 'toggle_off',        confirm: true },
+  enable:     { label: 'Enable',          icon: 'toggle_on',         confirm: true },
+  approve:    { label: 'Approve',         icon: 'check_circle',      confirm: true },
+  reject:     { label: 'Reject',          icon: 'cancel',            confirm: true },
+  lock:       { label: 'Lock',            icon: 'lock'              },
+  unlock:     { label: 'Unlock',          icon: 'lock_open'         },
+  clone:      { label: 'Clone',           icon: 'content_copy'      },
+  duplicate:  { label: 'Duplicate',       icon: 'content_copy'      },
+  rename:     { label: 'Rename',          icon: 'edit'              },
+  export:     { label: 'Export',          icon: 'download'          },
+  import:     { label: 'Import',          icon: 'upload'            },
+  print:      { label: 'Print',           icon: 'print'             },
+  send:       { label: 'Send',            icon: 'send'              },
+  close:      { label: 'Close',           icon: 'close'             },
+  refresh:    { label: 'Refresh',         icon: 'refresh'           },
 };
+
+/** Core commands always shown in context menu (disabled if not in kind.commands). */
+const CORE_COMMANDS = ['details', 'key', 'acct', 'move', 'delete'];
+
+/** Default icon for unknown commands (by keyword in command name). */
+const CMD_ICON_HINTS: [RegExp, string][] = [
+  [/delet|remov/i,    'delete'],
+  [/block|ban/i,      'block'],
+  [/lock/i,           'lock'],
+  [/unlock/i,         'lock_open'],
+  [/suspend|paus/i,   'pause_circle'],
+  [/activ|start/i,    'play_circle'],
+  [/archiv/i,         'archive'],
+  [/restor/i,         'restore'],
+  [/approv|accept/i,  'check_circle'],
+  [/reject|declin/i,  'cancel'],
+  [/enabl/i,          'toggle_on'],
+  [/disabl/i,         'toggle_off'],
+  [/clon|duplic|copy/i, 'content_copy'],
+  [/edit|modif|renam/i, 'edit'],
+  [/export|download/i,  'download'],
+  [/import|upload/i,     'upload'],
+  [/send|mail|notify/i,  'send'],
+  [/print/i,             'print'],
+  [/view|show|detail/i,  'visibility'],
+  [/search|find/i,       'search'],
+  [/config|setting/i,    'settings'],
+];
 
 /** Generate menu metadata for any command. Known commands get nice labels; unknown ones auto-generate. */
 function cmdMeta(cmd: string): CmdMeta {
   if (CMD_META[cmd]) return CMD_META[cmd];
   // Auto-generate: "my_command" → "My command"
   const label = cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/[_-]/g, ' ');
-  return { label, icon: 'extension' };
+  // Try to guess icon from command name
+  const hint = CMD_ICON_HINTS.find(([re]) => re.test(cmd));
+  return { label, icon: hint ? hint[1] : 'terminal' };
 }
 
 
@@ -308,14 +360,14 @@ export const AppShell: React.FC = () => {
     }
 
     // --- Commands section ---
-    // Standard commands (from CMD_META) are always shown; disabled if NOT in kind.commands.
+    // Core commands (details, key, acct, move, delete) are always shown; disabled if NOT in kind.commands.
     // This matches Angular canCmdClick() = kind.isCommandAllowed(cmd).
-    // Additional unknown commands from kind.commands are also shown (always enabled).
+    // All other commands from kind.commands are shown only when present (always enabled).
     const commandSet = new Set(kind?.commands ?? []);
     let firstCmd = true;
 
-    // 1) Standard commands — always visible, enabled only if in kind.commands
-    for (const cmd of Object.keys(CMD_META)) {
+    // 1) Core commands — always visible, enabled only if in kind.commands
+    for (const cmd of CORE_COMMANDS) {
       const meta = cmdMeta(cmd);
       const enabled = commandSet.has(cmd);
       items.push({
@@ -329,9 +381,9 @@ export const AppShell: React.FC = () => {
       firstCmd = false;
     }
 
-    // 2) Extra commands from dictionary not in CMD_META — always enabled
+    // 2) Extra commands from kind.commands not in CORE — always enabled, pick icon from CMD_META or auto-detect
     for (const cmd of commandSet) {
-      if (CMD_META[cmd]) continue; // already shown above
+      if (CORE_COMMANDS.includes(cmd)) continue; // already shown above
       const meta = cmdMeta(cmd);
       items.push({
         label: meta.label,
@@ -349,7 +401,7 @@ export const AppShell: React.FC = () => {
         dividerBefore: true,
         submenu: resolvedChildKinds.map(ck => ({
           label: ck.title,
-          icon: ck.icon || 'add',
+          icon: resolveNodeIcon(ck.title, ck.icon),
           onClick: () => setNewDialog({ open: true, parentNode: node, childKind: ck.id }),
         })),
       });
