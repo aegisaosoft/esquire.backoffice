@@ -15,44 +15,71 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import React from 'react';
-import { Box, Typography, Paper } from '@mui/material';
-import AssessmentIcon from '@mui/icons-material/Assessment';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { Box } from '@mui/material';
+import { useAuthContext } from '../../contexts/AuthContext';
+
+/** URL of the esquire.reports app (Vite dev server). */
+const REPORTS_URL = 'http://localhost:5174';
 
 /**
- * Reports plugin — placeholder content.
+ * Reports plugin content.
+ *
+ * Renders esquire.reports inside an iframe and forwards auth data
+ * from the backoffice AuthContext via postMessage.
  */
-export const ReportsContent: React.FC = () => (
-  <Box
-    sx={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100%',
-      gap: 3,
-      bgcolor: 'grey.50',
-    }}
-  >
-    <Paper
-      elevation={0}
-      sx={{
-        p: 4,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 2,
-        bgcolor: 'white',
-        borderRadius: 2,
-      }}
-    >
-      <AssessmentIcon sx={{ fontSize: 64, color: 'primary.main' }} />
-      <Typography variant="h5" color="text.primary">
-        Reports
-      </Typography>
-      <Typography variant="body2" color="text.secondary" textAlign="center">
-        This plugin is under development.
-      </Typography>
-    </Paper>
-  </Box>
-);
+export const ReportsContent: React.FC = () => {
+  const { auth, logout } = useAuthContext();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  /** Send auth state to the iframe. */
+  const sendAuth = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.postMessage(
+        { type: 'esquire:auth', payload: auth },
+        REPORTS_URL,
+      );
+    }
+  }, [auth]);
+
+  // Send auth whenever it changes
+  useEffect(() => {
+    sendAuth();
+  }, [sendAuth]);
+
+  // Listen for messages from iframe
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== REPORTS_URL) return;
+
+      if (event.data?.type === 'esquire:auth-request') {
+        // Iframe is asking for auth data
+        sendAuth();
+      }
+      if (event.data?.type === 'esquire:logout-request') {
+        // Iframe is requesting logout
+        logout();
+      }
+    };
+
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [sendAuth, logout]);
+
+  return (
+    <Box sx={{ width: '100%', height: '100%' }}>
+      <iframe
+        ref={iframeRef}
+        src={REPORTS_URL}
+        onLoad={sendAuth}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none',
+        }}
+        title="Esquire Reports"
+      />
+    </Box>
+  );
+};
